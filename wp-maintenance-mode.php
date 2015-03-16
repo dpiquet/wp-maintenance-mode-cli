@@ -11,6 +11,7 @@ if(!defined('WP_CLI')) { return; }
 class wpMaintenanceMode extends WP_CLI_Command {
 
 	protected $_pluginInstance = NULL;
+	protected $_pluginInstanceAdmin = NULL;
 
 	/**
 	 * Turn maintenance mode on
@@ -27,6 +28,7 @@ class wpMaintenanceMode extends WP_CLI_Command {
 		$settings['general']['status'] = 1;
 
 		if(update_option('wpmm_settings', $settings)) {
+			$this->_pluginInstanceAdmin->delete_cache();
 			WP_CLI::success('Maintenance mode enabled');
 		}
 		else {
@@ -49,6 +51,7 @@ class wpMaintenanceMode extends WP_CLI_Command {
 		$settings['general']['status'] = 0;
 
 		if(update_option('wpmm_settings', $settings)) {
+			$this->_pluginInstanceAdmin->delete_cache();
 			WP_CLI::success('Maintenance mode disabled');
 		}
 		else {
@@ -111,6 +114,7 @@ class wpMaintenanceMode extends WP_CLI_Command {
 		}
 
 		if(update_option('wpmm_settings', $settings)) {
+			$this->_pluginInstanceAdmin->delete_cache();
 			WP_CLI::success('maintenance nag design updated');
 		}
 		else {
@@ -156,12 +160,13 @@ class wpMaintenanceMode extends WP_CLI_Command {
 		$generalSettings = Array(
 			'status' => 'boolean',
 			'bypass_bots' => 'boolean',
-			'backend_role' => 'cap',
-			'frontend_role' => 'cap',
+			'backend_role' => 'role',
+			'frontend_role' => 'role',
 			'meta_robots' => 'boolean',
 			'redirection' => 'text',
 			'notice' => 'boolean',
-			'admin_link' => 'boolean'
+			'admin_link' => 'boolean',
+			'exclude' => 'exclude'
 		);
 
 		foreach($generalSettings as $setting => $type) {
@@ -171,10 +176,67 @@ class wpMaintenanceMode extends WP_CLI_Command {
 		}
 
 		if(update_option('wpmm_settings', $settings)) {
+			$this->_pluginInstanceAdmin->delete_cache();
 			WP_CLI::success('maintenance mode general settings updated');
 		}
 		else {
 			WP_CLI::error('Could not update maintenance mode general settings');
+		}
+
+	}
+
+	/**
+	 * Export subscribers in CSV format
+	 *
+	 * @subcommand export-subscribers
+	 */
+	public function export_subscribers($args = Array(), $assoc_args = Array()) {
+		$this->_plugin_activated();
+
+		$this->_pluginInstanceAdmin->subscribers_export();
+	}
+
+	/**
+	 * Reset plugin settings
+	 *
+	 * #OPTIONS
+	 * <tab>
+	 * : Tab to reset (all|general|design)
+	 *
+	 * @subcommand reset-settings
+	 */
+	public function reset_settings($args = Array(), $assoc_args = Array()) {
+		$this->_plugin_activated();
+
+		$defaultSettings = $this->_pluginInstance->default_settings();
+		$settings = $this->_pluginInstance->get_plugin_settings();
+
+		list($tab) = $args;
+
+		switch($tab) {
+			case 'general':
+				$settings['general'] = $defaultSettings['general'];
+				break;
+
+			case 'design':
+				$settings['design'] = $defaultSettings['design'];
+				break;
+
+			case 'all':	
+				$settings['general'] = $defaultSettings['general'];
+				$settings['design'] = $defaultSettings['design'];
+				break;
+			default:
+				WP_CLI::error("Invalid value '$tab' for reset-settings tab !");
+				break;
+		}
+
+		if(update_option('wpmm_settings', $settings)) {
+			$this->_pluginInstanceAdmin->delete_cache();
+			WP_CLI::success('settings reset');
+		}
+		else {
+			WP_CLI::error('Could not reset settings');
 		}
 
 	}
@@ -187,28 +249,80 @@ class wpMaintenanceMode extends WP_CLI_Command {
 			if($this->pluginInstance == NULL) {
 				$this->_pluginInstance = WP_Maintenance_Mode::get_instance();
 			}
+
+			if($this->_pluginInstanceAdmin == NULL) {
+				if(!class_exists(WP_Maintenance_Mode_Admin)) {
+					require_once(WPMM_CLASSES_PATH . 'wp-maintenance-mode-admin.php');
+				}
+				$this->_pluginInstanceAdmin = WP_Maintenance_Mode_Admin::get_instance();
+			}
 				
 			return true;
 		}
 	}
 
-	//todo
 	private function _filter_input($value, $type) {
 		switch($type) {
+			case 'html':
+				$sane = sanitize_text_field($value);
+				break;
+
 			case 'text':
-				$sane = $value;
+				$sane = sanitize_text_field($value);
 				break;
 
 			case 'color':
-				$sane = $value;
+				$sane = sanitize_text_field($value);
 				break;
 
 			case 'boolean':
-				$sane = $value;
+				if(!preg_match('/^(0|1)$/', $value)) {
+					WP_CLI::error("Invalid value $value. Is not a boolean");
+				}
+
+				$sane = (int)$value;
 				break;
 
-			case 'cap':
-				$sane = $value;
+			case 'role':
+				//multiple roles can be given on cli (role1|role2)
+				$roles = Array();
+				$roles = explode('|', $value);
+				$sane = Array();
+
+				if(empty($roles)) {
+					WP_CLI::error('no roles found from cli');
+				}
+
+				foreach($roles as $role) {
+					if(!preg_match('/^[a-zA-Z0-9_]{1,}/', $role)) {
+						WP_CLI::error("Invalid value $role. Is not a valid role name");
+					}
+
+					$sane[] = sanitize_text_field($role);
+				}
+
+				//multiple roles are only supported from 2.0.4 veresion
+				if(version_compare(WP_Maintenance_Mode::VERSION, '2.0.4', '<')) {
+					if(count($roles) > 1) {
+						WP_CLI::warning("Multiple roles are not supported in this version. Using the first one only");
+					}
+
+					$sane = $sane[0];
+				}
+
+				break;
+			case 'url':
+				$sane = esc_url($value);
+				break;
+
+			case 'exclude':
+				$excluded = explode('|', $value);
+				$sane = Array();
+
+				foreach($excluded as $exclude) {
+					$sane[] = sanitize_text_field($exclude);
+				}
+
 				break;
 
 			default:
