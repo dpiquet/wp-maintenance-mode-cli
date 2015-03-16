@@ -12,6 +12,8 @@ class wpMaintenanceMode extends WP_CLI_Command {
 
 	protected $_pluginInstance = NULL;
 	protected $_pluginInstanceAdmin = NULL;
+	protected $_settings = NULL;
+	protected $_modifiedSettings = false;
 
 	/**
 	 * Turn maintenance mode on
@@ -23,17 +25,12 @@ class wpMaintenanceMode extends WP_CLI_Command {
 
 		$networkWide = false;
 
-		$settings = $this->_pluginInstance->get_plugin_settings();
+		$this->_update_setting('general', 'status', 1);
 
-		$settings['general']['status'] = 1;
+		$successMsg = 'Maintenance mode enabled';
+		$errMsg = 'could not enable maitenance mode';
 
-		if(update_option('wpmm_settings', $settings)) {
-			$this->_pluginInstanceAdmin->delete_cache();
-			WP_CLI::success('Maintenance mode enabled');
-		}
-		else {
-			WP_CLI::error('Maintenance mode could not be enabled');
-		}
+		$this->_save_settings($successMsg, $errMsg);
 	}
 
 	/**
@@ -47,16 +44,11 @@ class wpMaintenanceMode extends WP_CLI_Command {
 
 		$networkWide = false;
 
-		$settings = $this->_pluginInstance->get_plugin_settings();
-		$settings['general']['status'] = 0;
+		$this->_update_setting('general', 'status', 0);
+		$success = 'Maintenance mode disabled';
+		$error = 'Maintenance mode could not be disabled';
 
-		if(update_option('wpmm_settings', $settings)) {
-			$this->_pluginInstanceAdmin->delete_cache();
-			WP_CLI::success('Maintenance mode disabled');
-		}
-		else {
-			WP_CLI::error('Maintenance mode could not be disabled');
-		}
+		$this->_save_settings($successMsg, $errMsg);
 	}
 
 	/**
@@ -85,15 +77,13 @@ class wpMaintenanceMode extends WP_CLI_Command {
 	 *
 	 * ## OPTIONS
 	 *
-	 * @synopsis [--title=<title>] [--heading=<heading>] [--heading-color=<color>] [--text=<text>] [--text-color=<color>]
+	 * @synopsis [--title=<title>] [--heading=<heading>] [--heading-color=<color>] [--text=<text>] [--text-color=<color>] [--bg_type=<bool>] [--bg_color=<color>] [--bg_custom=<boolean>] [--bg_predefined=<text>]
 	 *
 	 * @subcommand update-design-option
 	 */
 
 	public function update_design( $args = Array(), $assoc_args = Array() ) {
 		$this->_plugin_activated();
-
-		$settings = $this->_pluginInstance->get_plugin_settings();
 
 		$designSettings = Array(
 			'title' => 'text',
@@ -109,17 +99,13 @@ class wpMaintenanceMode extends WP_CLI_Command {
 
 		foreach($designSettings as $setting => $type) {
 			if(isset($assoc_args[$setting])) {
-				$settings['design'][$setting] = $this->_filter_input($assoc_args[$setting], $type);
+				$this->_update_setting('design', $setting, $this->_filter_input($assoc_args[$setting], $type));
 			}
 		}
 
-		if(update_option('wpmm_settings', $settings)) {
-			$this->_pluginInstanceAdmin->delete_cache();
-			WP_CLI::success('maintenance nag design updated');
-		}
-		else {
-			WP_CLI::error('Could not update maintenance nag design');
-		}
+		$successMsg = 'maintenance nag design updated';
+		$errorMsg = 'Could not update maintenance nag design';
+		$this->_save_settings($successMsg, $errorMsg);
 	}	
 
 	/**
@@ -148,11 +134,11 @@ class wpMaintenanceMode extends WP_CLI_Command {
 	 *
 	 * ## OPTIONS
 	 * 
-	 * @synopsis [--status=(0|1)] [--bypass_bots=(0|1)] [--backend_role=<cap>] [--frontend_role=<cap>] [--meta_robots=(0|1)] [--redirection=<url>] [--notice=(0|1)] [--admin_link=(0|1)]
+	 * @synopsis [--status=<bool>] [--bypass_bots=<bool>] [--backend_role=<cap>] [--frontend_role=<cap>] [--meta_robots=<bool>] [--redirection=<url>] [--notice=<bool>] [--admin_link=<bool>]
 	 *
-	 * @subcommand update-general
+	 * @subcommand update-general-option
 	 */
-	public function update_general( $args = Array(), $assoc_args = Array() ) {
+	public function update_general_option( $args = Array(), $assoc_args = Array() ) {
 		$this->_plugin_activated();
 
 		$settings = $this->_pluginInstance->get_plugin_settings();
@@ -171,18 +157,14 @@ class wpMaintenanceMode extends WP_CLI_Command {
 
 		foreach($generalSettings as $setting => $type) {
 			if(isset($assoc_args[$setting])) {
-				$settings['general'][$setting] = $this->_filter_input($assoc_args[$setting], $type);
+				$this->_update_setting('general', $setting, $this->_filter_input($assoc_args[$setting], $type));
 			}
 		}
 
-		if(update_option('wpmm_settings', $settings)) {
-			$this->_pluginInstanceAdmin->delete_cache();
-			WP_CLI::success('maintenance mode general settings updated');
-		}
-		else {
-			WP_CLI::error('Could not update maintenance mode general settings');
-		}
+		$successMsg = 'maintenance mode general settings updated';
+		$errorMsg = 'Could not update maintenance mode general settings';
 
+		$this->_save_settings($successMsg, $errorMsg);
 	}
 
 	/**
@@ -209,36 +191,32 @@ class wpMaintenanceMode extends WP_CLI_Command {
 		$this->_plugin_activated();
 
 		$defaultSettings = $this->_pluginInstance->default_settings();
-		$settings = $this->_pluginInstance->get_plugin_settings();
+		//$settings = $this->_pluginInstance->get_plugin_settings();
 
 		list($tab) = $args;
 
 		switch($tab) {
 			case 'general':
-				$settings['general'] = $defaultSettings['general'];
+				$this->_settings['general'] = $defaultSettings['general'];
 				break;
 
 			case 'design':
-				$settings['design'] = $defaultSettings['design'];
+				$this->_settings['design'] = $defaultSettings['design'];
 				break;
 
 			case 'all':	
-				$settings['general'] = $defaultSettings['general'];
-				$settings['design'] = $defaultSettings['design'];
+				$this->_settings['general'] = $defaultSettings['general'];
+				$this->_settings['design'] = $defaultSettings['design'];
 				break;
 			default:
 				WP_CLI::error("Invalid value '$tab' for reset-settings tab !");
 				break;
 		}
 
-		if(update_option('wpmm_settings', $settings)) {
-			$this->_pluginInstanceAdmin->delete_cache();
-			WP_CLI::success('settings reset');
-		}
-		else {
-			WP_CLI::error('Could not reset settings');
-		}
+		$successMsg = $tab . ' settings reset';
+		$errorMsg = 'Could not reset '.$tab.' settings';
 
+		$this->_save_settings($successMsg, $errorMsg);
 	}
 
 	private function _plugin_activated() {
@@ -246,8 +224,14 @@ class wpMaintenanceMode extends WP_CLI_Command {
 			WP_CLI::error('wp-maintenance-mode plugin is not activated');
 		}
 		else {
+			//compatible with wp-maintenance-mode from 2.0.0
+			if(version_compare(WP_Maintenance_Mode::VERSION, '2.0.0', '<') == -1) {
+				WP_CLI::error('You must have wp-maintenance-mode 2.0.0 or above to use this command !');
+			}
+			
 			if($this->pluginInstance == NULL) {
 				$this->_pluginInstance = WP_Maintenance_Mode::get_instance();
+				$this->_settings = $this->_pluginInstance->get_plugin_settings();
 			}
 
 			if($this->_pluginInstanceAdmin == NULL) {
@@ -302,7 +286,7 @@ class wpMaintenanceMode extends WP_CLI_Command {
 				}
 
 				//multiple roles are only supported from 2.0.4 veresion
-				if(version_compare(WP_Maintenance_Mode::VERSION, '2.0.4', '<')) {
+				if(version_compare(WP_Maintenance_Mode::VERSION, '2.0.4', '<') == -1) {
 					if(count($roles) > 1) {
 						WP_CLI::warning("Multiple roles are not supported in this version. Using the first one only");
 					}
@@ -333,6 +317,34 @@ class wpMaintenanceMode extends WP_CLI_Command {
 		return $sane;
 	}
 
+	//check if settings have changed before commiting to avoid false error reporting
+	// update_option returns false if value did not change or failed
+	private function _save_settings($successMsg, $errMsg) {
+		if($this->_modifiedSettings == false) {
+			WP_CLI::success($successMsg);
+		}
+		else {
+			if(update_option('wpmm_settings', $this->_settings)) {
+				$this->_pluginInstanceAdmin->delete_cache();
+
+				WP_CLI::success($successMsg);
+			}
+			else {
+				WP_CLI::error($errMsg);
+			}
+		}
+	}
+
+	private function _update_setting($tab, $key, $value) {
+
+		// == operator works with values, arrays and instances	
+		if($this->_settings[$tab][$key] == $value) {
+			return;
+		}
+
+		$this->_settings[$tab][$key] = $value;
+		$this->_modifiedSettings = true;
+	}
 }
 
 WP_CLI::add_command('wp-maintenance-mode', 'wpMaintenanceMode');
