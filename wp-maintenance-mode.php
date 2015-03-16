@@ -197,16 +197,30 @@ class wpMaintenanceMode extends WP_CLI_Command {
 
 		switch($tab) {
 			case 'general':
-				$this->_settings['general'] = $defaultSettings['general'];
+				if($this->_settings['general'] != $defaultSettings['general']) {
+					$this->_modifiedSettings = true;
+					$this->_settings['general'] = $defaultSettings['general'];
+				}
 				break;
 
 			case 'design':
-				$this->_settings['design'] = $defaultSettings['design'];
+				if($this->_settings['design'] != $defaultSettings['design']) {
+					$this->_modifiedSettings = true;
+					$this->_settings['design'] = $defaultSettings['design'];
+				}
 				break;
 
-			case 'all':	
-				$this->_settings['general'] = $defaultSettings['general'];
-				$this->_settings['design'] = $defaultSettings['design'];
+			case 'all':
+				if($this->_settings['general'] != $defaultSettings['general']) {
+					$this->_modifiedSettings = true;
+					$this->_settings['general'] = $defaultSettings['general'];
+				}
+
+				if($this->_settings['design'] != $defaultSettings['design']) {
+					$this->_modifiedSettings = true;
+					$this->_settings['design'] = $defaultSettings['design'];
+				}
+
 				break;
 			default:
 				WP_CLI::error("Invalid value '$tab' for reset-settings tab !");
