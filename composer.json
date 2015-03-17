@@ -1,0 +1,25 @@
+{
+	"name": "dpiquet/wp-maintenance-mode",
+	"type": "command",
+	"description": "WP-CLI commands for wp-maintenance-mode",
+	"keywords": ["wp-cli", "wp-maintenance-mode", "wordpress", "maintenance"],
+	"homepage": "https://github.com/dpiquet/wp-maintenance-mode-cli",
+	"require": {
+		"php": ">=5.3"
+	},
+	"license"; "GPLv2+",
+	"authors": [
+		{
+			"name": "Damien PIQUET",
+			"email": "piqudam@gmail.com",
+			"homepage": "https://github.com/dpiquet/"
+		}
+	],
+	"support": {
+		"issues": "https://github.com/dpiquet/wp-maintenance-mode-cli/issues",
+		"source": "https://github.com/dpiquet/wp-maintenance-mode-cli/"
+	},
+	"autoload": {
+		"files": [ "wp-maintenance-mode.php" ]
+	}
+}

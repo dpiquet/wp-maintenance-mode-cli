@@ -5,7 +5,11 @@ if(!defined('WP_CLI')) { return; }
 /**
  * Control wp-maintenance-mode plugin
  *
- * @author dpiquet <piqudam@gmail.com>
+ * @package WP-CLI
+ * @subpackage wp-maintenance-mode
+ *
+ * @author Damien PIQUET (doyousoft.com) <piqudam@gmail.com>
+ * @licence GPLv2+
  */
 
 class wpMaintenanceMode extends WP_CLI_Command {
@@ -52,23 +56,41 @@ class wpMaintenanceMode extends WP_CLI_Command {
 	}
 
 	/**
-	 * Show wp-maintenance-mode settings
+	 * Get a wp-maintenance-mode setting value
 	 *
-	 * @subcommand show-settings
+	 * @synopsis --tab=<tab> --value=<value>
+	 * @subcommand get-setting
 	 */
-	public function show_settings( $args = Array(), $assoc_args = Array() ) {
+	public function get_setting( $args = Array(), $assoc_args = Array() ) {
 		$this->_plugin_activated();
 
-		$settings = $this->_pluginInstance->get_plugin_settings();
+		//$settings = $this->_pluginInstance->get_plugin_settings();
 
-		print_r($settings);
+		//print_r($settings);
+		
+		if(!isset($assoc_args['tab'])) {
+			WP_CLI::error('Missing tab argument for get-setting command');
+		}
 
-		foreach($settings['general'] as $key => $value) {
-			if( is_array($value) || is_object($value)) {
-				//continue;
+		$tab = $assoc_args['tab'];
+
+		if(!isset($assoc_args['value'])) {
+			WP_CLI:error('Missing value argument for get-setting command');
+		}
+
+		$value = $assoc_args['value'];
+
+		if(!isset($this->_settings[$tab][$value])) {
+			WP_CLI::error("Unknown option $value in $tab tab !");
+		}
+
+		if(is_array($this->_settings[$tab][$value])) {
+			foreach($this->_settings[$tab][$value] as $line) {
+				WP_CLI::line($line);
 			}
-
-			WP_CLI::line($key. ' '.$value);
+		}
+		else {
+			WP_CLI::line($this->_settings[$tab][$value]);
 		}
 	}
 
@@ -82,7 +104,7 @@ class wpMaintenanceMode extends WP_CLI_Command {
 	 * @subcommand update-design-option
 	 */
 
-	public function update_design( $args = Array(), $assoc_args = Array() ) {
+	public function update_design_option( $args = Array(), $assoc_args = Array() ) {
 		$this->_plugin_activated();
 
 		$designSettings = Array(
@@ -94,7 +116,8 @@ class wpMaintenanceMode extends WP_CLI_Command {
 			'bg_type' => 'boolean',
 			'bg_color' => 'color',
 			'bg_custom' => 'boolean',
-			'bg_predefined' => 'text'
+			'bg_predefined' => 'text',
+			'custom_css' => 'text_array'
 		);
 
 		foreach($designSettings as $setting => $type) {
@@ -134,17 +157,16 @@ class wpMaintenanceMode extends WP_CLI_Command {
 	 *
 	 * ## OPTIONS
 	 * 
-	 * @synopsis [--status=<bool>] [--bypass_bots=<bool>] [--backend_role=<cap>] [--frontend_role=<cap>] [--meta_robots=<bool>] [--redirection=<url>] [--notice=<bool>] [--admin_link=<bool>]
+	 * @synopsis [--status=<bool>] [--bypass_bots=<bool>] [--backend_role=<cap>] [--frontend_role=<cap>] [--meta_robots=<bool>] [--redirection=<url>] [--notice=<bool>] [--admin_link=<bool>] [--exclude=<urls>]
 	 *
 	 * @subcommand update-general-option
 	 */
 	public function update_general_option( $args = Array(), $assoc_args = Array() ) {
 		$this->_plugin_activated();
 
-		$settings = $this->_pluginInstance->get_plugin_settings();
-
 		$generalSettings = Array(
 			'status' => 'boolean',
+			'status_date' => 'text',
 			'bypass_bots' => 'boolean',
 			'backend_role' => 'role',
 			'frontend_role' => 'role',
@@ -152,7 +174,7 @@ class wpMaintenanceMode extends WP_CLI_Command {
 			'redirection' => 'text',
 			'notice' => 'boolean',
 			'admin_link' => 'boolean',
-			'exclude' => 'exclude'
+			'exclude' => 'text_array'
 		);
 
 		foreach($generalSettings as $setting => $type) {
@@ -163,6 +185,59 @@ class wpMaintenanceMode extends WP_CLI_Command {
 
 		$successMsg = 'maintenance mode general settings updated';
 		$errorMsg = 'Could not update maintenance mode general settings';
+
+		$this->_save_settings($successMsg, $errorMsg);
+	}
+
+	/**
+	 * Update modules option value
+	 *
+	 *
+	 * @synopsis [--countdow_status=<bool>] [--countdown_start=<date>] [--countdown_details=<values>] [--countdown_color=<color>] [--subscribe_status=<bool>] [--subscribe_text=<text>] [--subscribe_text_color=<color>] [--social_status=<bool>] [--social_target=<bool>] [--social_github=<url>] [--social_dribbble=<url>] [--social_twitter=<url>] [--social_facebook=<url>] [--social_pinterest=<url>] [--social_googleplus=<url>] [--social_linkedin=<url>] [--contact_status=<boolean>] [--contact_email=<email>] [--contact_effects=<effect>] [--ga_status=<boolean>] [--ga_code=<text>]
+	 *
+	 * @subcommand update-modules-option
+	 */
+	public function update_modules_option( $args = Array(), $assoc_args = Array() ) {
+		$this->_plugin_activated();
+
+		$modulesSettings = Array(
+			'countdown_status' => 'boolean',
+			'countdown_start' => 'date',
+			'countdown_details' => 'countdown_array',
+			'countdown_color' => 'color',
+			'subscribe_status' => 'boolean',
+			'subscribe_text' => 'text',
+			'subscribe_text_color' => 'color',
+			'social_status' => 'boolean',
+			'social_target' => 'boolean',
+			'social_github' => 'text',
+			'social_dribbble' => 'text',
+			'social_twitter' => 'text',
+			'social_facebook' => 'text',
+			'social_pinterest' => 'text',
+			'social_google+' => 'text',
+			'social_linkedin' => 'text',
+			'contact_status' => 'boolean',
+			'contact_email' => 'email',
+			'contact_effects' => 'text',
+			'ga_status' => 'boolean',
+			'ga_code' => 'text',
+			'custom_css' => 'text_array'
+		);
+
+		foreach($modulesSettings as $setting => $type) {
+			if(isset($assoc_args[$setting])) {
+				$this->_update_setting('modules', $setting, $this->_filter_input($assoc_args[$setting], $type));
+			}
+		}
+
+		// social_google+ cannot be used a parameter, using social_googleplus instead
+		if(isset($assoc_args['social_googleplus'])) {
+			$this->_update_setting('modules', 'social_google+', $this->_filter_input($assoc_args['social_googleplus'], 'text'));
+		}
+
+		$successMsg = 'maintenance mode modules settings updated';
+		$errorMsg = 'Could not update maintenance mode modules settings';
 
 		$this->_save_settings($successMsg, $errorMsg);
 	}
@@ -191,7 +266,6 @@ class wpMaintenanceMode extends WP_CLI_Command {
 		$this->_plugin_activated();
 
 		$defaultSettings = $this->_pluginInstance->default_settings();
-		//$settings = $this->_pluginInstance->get_plugin_settings();
 
 		list($tab) = $args;
 
@@ -210,6 +284,13 @@ class wpMaintenanceMode extends WP_CLI_Command {
 				}
 				break;
 
+			case 'module':
+				if($this->_settings['modules'] != $defaultSettings['modules']) {
+					$this->_modifiedSettings = true;
+					$this->_settings['modules'] = $defaultSettings['modules'];
+				}
+				break;
+
 			case 'all':
 				if($this->_settings['general'] != $defaultSettings['general']) {
 					$this->_modifiedSettings = true;
@@ -219,6 +300,11 @@ class wpMaintenanceMode extends WP_CLI_Command {
 				if($this->_settings['design'] != $defaultSettings['design']) {
 					$this->_modifiedSettings = true;
 					$this->_settings['design'] = $defaultSettings['design'];
+				}
+
+				if($this->_settings['modules'] != $defaultSettings['modules']) {
+					$this->_modifiedSettings = true;
+					$this->_settings['modules'] = $defaultSettings['modules'];
 				}
 
 				break;
@@ -261,6 +347,10 @@ class wpMaintenanceMode extends WP_CLI_Command {
 
 	private function _filter_input($value, $type) {
 		switch($type) {
+			case 'date':
+				$sane = sanitize_text($value);
+				break;
+
 			case 'html':
 				$sane = sanitize_text_field($value);
 				break;
@@ -313,14 +403,32 @@ class wpMaintenanceMode extends WP_CLI_Command {
 				$sane = esc_url($value);
 				break;
 
-			case 'exclude':
-				$excluded = explode('|', $value);
+			case 'countdown_array':
 				$sane = Array();
+				$fields = explode('|', $value);
 
-				foreach($excluded as $exclude) {
-					$sane[] = sanitize_text_field($exclude);
+				if(count($fields) != 3) {
+					WP_CLI::error("Wrong parameter $value for countdown");
 				}
 
+				$sane['days'] = $this->_filter_input($fields[0], 'integer');
+				$sane['hours'] = $this->_filter_input($fields[1], 'integer');
+				$sane['minutes'] = $this->_filter_input($fields[2], 'integer');
+
+				break;
+
+			case 'text_array':
+				$sane = Array();
+
+				$fields = explode('|', $value);
+				foreach($fields as $field) {
+					$sane[] = $this->_filter_input($field, 'text');
+				}
+
+				break;
+
+			case 'integer':
+				$sane = preg_replace('[^0-9]', '', $value);
 				break;
 
 			default:
@@ -350,6 +458,10 @@ class wpMaintenanceMode extends WP_CLI_Command {
 	}
 
 	private function _update_setting($tab, $key, $value) {
+
+		if(!isset($this->_settings[$tab][$key])) {
+			WP_CLI::error("Invalid option value $key for tab $tab");
+		}
 
 		// == operator works with values, arrays and instances	
 		if($this->_settings[$tab][$key] == $value) {
