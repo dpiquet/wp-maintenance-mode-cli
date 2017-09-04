@@ -7,7 +7,7 @@
 	"require": {
 		"php": ">=5.3"
 	},
-	"license"; "GPLv2+",
+	"license": "GPLv2+",
 	"authors": [
 		{
 			"name": "Damien PIQUET",
